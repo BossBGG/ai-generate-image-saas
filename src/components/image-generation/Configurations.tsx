@@ -100,7 +100,7 @@ const Configurations = () => {
       if (name === "model") {
         let newSteps;
 
-        if (value.model === "black-forest-labs/flux-schell") {
+        if (value.model === "black-forest-labs/flux-schnell") {
           newSteps = 4;
         } else {
           newSteps = 28;
@@ -155,7 +155,7 @@ const Configurations = () => {
                       <SelectItem value="black-forest-labs/flux-dev">
                         Flux Dev
                       </SelectItem>
-                      <SelectItem value="black-forest-labs/flux-schell">
+                      <SelectItem value="black-forest-labs/flux-schnell">
                         Flux Schnell
                       </SelectItem>
                     </SelectContent>
@@ -303,7 +303,7 @@ const Configurations = () => {
                       min={1}
                       max={
                         form.getValues("model") ===
-                        "black-forest-labs/flux-schell"
+                        "black-forest-labs/flux-schnell"
                           ? 4
                           : 50
                       }

@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { z } from "zod";
 import { ImageGenerationFormSchema } from "@/components/image-generation/Configurations";
-import { generateImageAction } from '@/app/actions/image-actions';
-import { de } from 'zod/v4/locales';
+import { generateImageAction, storeImages } from '@/app/actions/image-actions';
+import { de, id } from 'zod/v4/locales';
+import { toast } from 'sonner';
 interface GenerateState{
     loading: boolean,
     images: Array<{url: string}>,
@@ -18,22 +19,27 @@ const useGeneratedStore = create<GenerateState>((set) => ({
   generateImage: async (values: z.infer<typeof ImageGenerationFormSchema>) => {
     set({loading: true, error: null})
 
+    const toastId = toast.loading("Generating images...");
+
     try{
     const {error, success, data} = await generateImageAction(values);
     if(!success){
         set({error: error, loading: false})
         return
     }
-
-    console.log(data);
-
     const dataWithUrl = data.map((url:string) => {
         return {
-            url
+            url,
+            ...values
         }
     })
 
-    set({images: dataWithUrl, loading: false})
+    set({images: dataWithUrl, loading: false});
+    toast.success("Images generated successfully!", {id: toastId});
+
+    await storeImages(dataWithUrl)
+
+    toast.success("Images stored successfully!", {id: toastId});
     } catch(error){
         console.error(error);
         set({error: "Failed to generate image. Please try again.", loading: false})

@@ -35,8 +35,33 @@ const GeneratedImages = () => {
 
   const images = useGeneratedStore((state) => state.images);
   const loading = useGeneratedStore((state) => state.loading);
+  const error = useGeneratedStore((state) => state.error);
 
-  console.log(images);
+  console.log('Images:', images);
+  console.log('Loading:', loading);
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-2xl bg-muted">
+        <CardContent className="flex aspect-square items-center justify-center p-6">
+          <span className="text-2xl">Generating images...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="w-full max-w-2xl bg-destructive/10 border-destructive">
+        <CardContent className="flex aspect-square items-center justify-center p-6">
+          <div className="text-center space-y-2">
+            <span className="text-xl font-semibold text-destructive">Generation Failed</span>
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (images.length === 0) {
     return (

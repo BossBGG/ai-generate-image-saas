@@ -1,10 +1,14 @@
 "use server";
-import { z } from "zod";
+import { success, z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ImageGenerationFormSchema } from "@/components/image-generation/Configurations";
 import Replicate from "replicate";
 import fs from "node:fs";
-import { tr } from "zod/v4/locales";
+import { createClient } from "@/lib/supabase/server";
+import { Database } from "@datatypes.types";
+import { imageMeta } from "image-meta";
+import { randomUUID } from "node:crypto";
+import { error } from "node:console";
 
 interface ImageResponse {
   error: string | null;
@@ -18,8 +22,8 @@ const replicate = new Replicate({
 });
 
 export async function generateImageAction(
-  input: (z.infer<typeof ImageGenerationFormSchema>)
-):Promise<ImageResponse> {
+  input: z.infer<typeof ImageGenerationFormSchema>
+): Promise<ImageResponse> {
   const modelInput = {
     prompt: input.prompt,
     go_fast: true,
@@ -37,7 +41,7 @@ export async function generateImageAction(
     const output = await replicate.run(input.model as `${string}/${string}`, {
       input: modelInput,
     });
-    console.log("output" , output)
+    console.log("output", output);
     return {
       error: null,
       success: true,
@@ -47,7 +51,94 @@ export async function generateImageAction(
     return {
       error: error.message || "Failed to generate image.",
       success: false,
-      data: null
+      data: null,
     };
   }
+}
+
+export async function imgUrlToBlob(url: string) {
+  const response = fetch(url);
+  const blob = (await response).blob();
+  return (await blob).arrayBuffer();
+}
+
+type storeImageInput = {
+  url: string;
+} & Database["public"]["Tables"]["generated_images"]["Insert"];
+
+export async function storeImages(data: storeImageInput[]) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return {
+      error: "Unauthorized",
+      success: false,
+      data: null,
+    };
+  }
+
+  const uploadResults = [];
+
+  for (const img of data) {
+    const arrayBuffer = await imgUrlToBlob(img.url);
+    const { width, height, type } = imageMeta(new Uint8Array(arrayBuffer));
+
+    const fileName = `image_${randomUUID()}.${type}`;
+    const filePath = `${user.id}/${fileName}`;
+
+    const { error: storageError } = await supabase.storage
+      .from("generated_images")
+      .upload(filePath, arrayBuffer, {
+        contentType: `image/${type}`, // image/png or image/jp
+        cacheControl: "3600",
+        upsert: false,
+      });
+    if (storageError) {
+      uploadResults.push({
+        fileName,
+        error: storageError.message,
+        success: false,
+        data: null,
+      });
+      continue;
+    }
+
+    const { data: dbData, error: dbError } = await supabase
+      .from("generated_images")
+      .insert([
+        {
+          user_id: user.id,
+          model: img.model,
+          prompt: img.prompt,
+          aspect_ratio: img.aspect_ratio,
+          guidance: img.guidance,
+          num_inference_steps: img.num_inference_steps,
+          output_format: img.output_format,
+          image_name: fileName,
+          width,
+          height,
+        },
+      ])
+      .select();
+
+    if (dbError) {
+      uploadResults.push({
+        fileName,
+        error: dbError.message,
+        success: !dbError,
+        data: dbData || null,
+      });
+    }
+  }
+
+  console.log('uploadResults: ', uploadResults)
+
+  return {
+    error: null,
+    success: true,
+    data: { results: uploadResults },
+  };
 }
